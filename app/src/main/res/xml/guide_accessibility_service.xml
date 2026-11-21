@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Read-only guide service: no canPerformGestures, no key filtering. canTakeScreenshot is for the
+     artemis-style multimodal observation (FLAG_SECURE windows are refused by the OS).
+     typeViewScrolled is requested on purpose: Chrome only serializes the complete web tree
+     for services that ask for it (SetBrowserAXMode in Chromium). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged|typeViewClicked|typeViewLongClicked|typeViewScrolled|typeViewTextChanged|typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/a11y_service_description"
+    android:notificationTimeout="80"
+    android:isAccessibilityTool="false" />

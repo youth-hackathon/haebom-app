@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">해봄</string>
+    <string name="a11y_service_label">해봄 (화면 안내)</string>
+    <string name="a11y_service_description">화면의 버튼과 글자를 읽어, 지금 눌러야 할 곳을 화면 위에 표시합니다. 대신 누르거나 입력하지 않습니다.</string>
+</resources>
