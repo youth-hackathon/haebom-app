@@ -944,7 +944,10 @@ class ScreenSignature(
                 snap.windows.filter { it.type != android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY && it.pkg.isNotEmpty() }
                     .map { "${ScreenSnapshot.windowTypeName(it.type)}:${it.pkg}:${it.title}" }.toSet(),
                 els.groupingBy { "${it.packageName}|${it.className}|${it.viewId}" }.eachCount(),
-                els.filter { it.label.isNotEmpty() }.groupingBy { it.label }.eachCount(),
+                // A switch or a choice that flipped is a change too ("오후" selected instead of "오전"): its label says so.
+                // Without this a wrong tap on a choice left the step open on its old target, and the server was not asked.
+                els.filter { it.label.isNotEmpty() }
+                    .groupingBy { it.label + if (it.checkable) (if (it.node.isChecked) " [on]" else " [off]") else "" }.eachCount(),
             )
         }
 
