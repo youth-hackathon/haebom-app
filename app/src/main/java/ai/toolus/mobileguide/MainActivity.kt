@@ -136,13 +136,14 @@ class MainActivity : Activity() {
         // Figma "시안 A · 큰 타일 2×2": what the person was doing is the biggest block, the rest are four equal tiles.
         // The guide server looks at the screen as it is, so asking for the same thing again goes on from where the phone is.
         // Nothing started yet: the block offers one thing to try first ([Practice.first]), so it is never missing.
+        // Its words say what pressing it does ("안내 받기"): the person gets a guide, the phone does not do it for them.
         if (last != null) {
             val short = Practice.short(last)
             val done = prefs.getBoolean("done_${Practice.key(last)}", false) && prefs.getInt("last_step", 0) == 0
             col.addView(if (done) continueBlock("$short · 혼자서", 0, 0, label = "복습하기", icon = Icon.REPLAY) { startFlow(last, review = true) }
                 else continueBlock(short, prefs.getInt("last_step", 0), prefs.getInt("last_total", 0)) { startFlow(last) }, lp(top = 16))
         } else {
-            col.addView(continueBlock(Practice.first.short, 0, 0, label = "먼저 해 보기") { startFlow(Practice.first.task) }, lp(top = 16))
+            col.addView(continueBlock(Practice.first.short, 0, 0, label = "안내 받기") { startFlow(Practice.first.task) }, lp(top = 16))
         }
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun row(a: View, b: View) = LinearLayout(this).apply {
@@ -456,11 +457,8 @@ class MainActivity : Activity() {
             val ok = PlannerClient.health()
             runOnUiThread { status.text = lines(if (ok) "연결됨" else "연결 안 됨") }
         }
-        if (GuideSettings.ttsBase.isNotEmpty()) {
-            col.addView(text("읽어 주는 목소리", 19f, T1, bold = true), lp(top = 24))
-            col.addView(choice("자연스러운 목소리", GuideSettings.ttsStream) { GuideSettings.ttsStream = true; showSettings() }, lp(top = 8))
-            col.addView(choice("빠른 기계 목소리", !GuideSettings.ttsStream) { GuideSettings.ttsStream = false; showSettings() }, lp(top = 8))
-        }
+        // No choice of voice here: it is always Gemini's. (How the sound is fetched, in pieces or whole, is a matter
+        // for whoever sets the phone up: DEBUG_CONFIG stream, scripts/setup_device.py --stream.)
         col.addView(button("화면 안내 켜는 방법", Kind.NEUTRAL) { showPermission() }, lp(top = 28))
         col.addView(button("지금 안내 멈추기", Kind.NEUTRAL) { GuideHub.stop(); Toast.makeText(this, "안내를 멈췄어요.", Toast.LENGTH_SHORT).show() }, lp(top = 12, bottom = 8))
         setPage(col)
