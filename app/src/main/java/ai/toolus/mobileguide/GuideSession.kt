@@ -148,6 +148,8 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
             put("elapsed_s", (System.currentTimeMillis() - startedAt) / 1000)
             put("event", event)
             put("event_detail", detail)
+            // the phone's own settings: the server can tell "done" from them where the screen cannot show it
+            put("facts", DeviceFacts.read(service))
             put("screen", JSONObject().apply {
                 put("package", snap.packageName)
                 put("width", snap.width)
