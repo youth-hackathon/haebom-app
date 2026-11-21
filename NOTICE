@@ -1,0 +1,11 @@
+This app contains work derived from google/artemis
+(https://github.com/google/artemis), Copyright 2026 Google LLC,
+licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Derived parts and modifications:
+- app/src/main/java/ai/toolus/mobileguide/ScreenSnapshot.kt: Kotlin port of HierarchyDumper.snapshotNode and
+  A11yNode.writeXml (packages/artemis-accessibility-helper). Modified to leave out this app's own windows and
+  accessibility overlays, and to keep node handles for the guide catalog.
+
+The app does not contain artemis itself. The artemis planner runs in the guide server
+(https://github.com/youth-hackathon/haebom-artemis); the app sends it the screen and shows the one action it returns.
