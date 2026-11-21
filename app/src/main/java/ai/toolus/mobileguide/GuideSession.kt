@@ -88,6 +88,13 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
         overlay.onReplay = { Speaker.say(service, it, again = true) }
     }
 
+    /** How the person leaves an app on this phone: swipes (true) or the bar with back, home and recents (false). */
+    private fun gestureNavigation(): Boolean {
+        val res = service.resources
+        val id = res.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        return id != 0 && runCatching { res.getInteger(id) }.getOrDefault(0) == 2   // 0: three buttons, 1: two, 2: gestures
+    }
+
     /** What the home screen shows of the last guide ("이어서 하기", "복습하기"); the activity reads the same file. */
     private fun kept() = service.getSharedPreferences("haebom", android.content.Context.MODE_PRIVATE)
 
@@ -825,11 +832,18 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
             }, kind = GuideOverlay.Instruction.Kind.SCROLL)
             "press_guide" -> {
                 val key = (s.completion as? GuideCatalog.Completion.Press)?.key
-                // no navigation-bar button on screen: gesture navigation
+                // The ring is on the button when it was found on screen. When it was not (this app's own screen is in
+                // front, or the bar is hidden), the words depend on how this phone is navigated: with the three-button
+                // bar the sentence says where the button is; only with gesture navigation is it a swipe.
                 GuideOverlay.Instruction(if (s.ref != null) when (key) {
                     "BACK" -> "뒤로 버튼을 누르세요"
                     "HOME" -> "홈 버튼을 누르세요"
                     "APP_SWITCH" -> "최근 앱 버튼을 누르세요"
+                    else -> "버튼을 누르세요"
+                } else if (!gestureNavigation()) when (key) {
+                    "BACK" -> "화면 맨 아래 왼쪽의 뒤로 버튼을 누르세요"
+                    "HOME" -> "화면 맨 아래 가운데의 홈 버튼을 누르세요"
+                    "APP_SWITCH" -> "화면 맨 아래 오른쪽의 최근 앱 버튼을 누르세요"
                     else -> "버튼을 누르세요"
                 } else when (key) {
                     "BACK" -> "화면 왼쪽 끝에서 안쪽으로 쓸어 주세요"
