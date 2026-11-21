@@ -34,8 +34,11 @@ class GuideAccessibilityService : AccessibilityService() {
                     intent.getStringExtra("mode")?.let { GuideSettings.guideMode = it }
                     intent.getStringExtra("tts_base")?.let { GuideSettings.ttsBase = it }
                     intent.getStringExtra("engine")?.let { GuideSettings.ttsEngine = it }
+                    intent.getStringExtra("stream")?.let { GuideSettings.ttsStream = it == "true" || it == "1" }
+                    // the speech server's address can end in a secret path: the log names the host only
                     Log.i(GuideSession.TAG, "CONFIG guide=${GuideSettings.guideBase} mode=${GuideSettings.guideMode.ifEmpty { "-" }} " +
-                        "tts=${GuideSettings.ttsBase.ifEmpty { "-" }} engine=${GuideSettings.ttsEngine.ifEmpty { "-" }}")
+                        "tts=${GuideSettings.hostOf(GuideSettings.ttsBase).ifEmpty { "-" }} engine=${GuideSettings.ttsEngine.ifEmpty { "-" }} " +
+                        "stream=${GuideSettings.ttsStream}")
                     GuideHub.post("system", "안내 서버: ${GuideSettings.guideBase}")
                 }
             }

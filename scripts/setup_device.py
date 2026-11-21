@@ -7,7 +7,9 @@ Steps: install app-debug.apk (build it first: gradlew assembleDebug), turn the a
 app at the two servers, wake the screen, and ask the app what it is set to (DEBUG_CONFIG).
 
 Without --guide / --tts the servers are the ones on this computer (ports 8765 and 8766), reached through
-`adb reverse`. --mode and --engine choose the servers' way of working; the default is `baseline` on both.
+`adb reverse`. `--tts default` (or `--guide default`) leaves the address the app was built with (local.properties,
+see app/build.gradle.kts). --mode and --engine choose the servers' way of working; the default is `baseline` on both.
+--stream true|false chooses how the voice is fetched: in pieces (`/tts/stream`, the app's default) or whole (`/tts`).
 Some phones (One UI) do not let adb turn an accessibility service on; the script then says so and the service
 is switched on by hand: Settings > Accessibility > Installed apps > 해봄 (화면 안내).
 """
@@ -48,8 +50,11 @@ def healthy(base: str) -> bool:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--serial", required=True)
-    ap.add_argument("--guide", default=LOCAL_GUIDE, help="guide server (haebom-artemis)")
-    ap.add_argument("--tts", default=LOCAL_TTS, help="TTS server (haebom-tts); '' for the phone's own voice only")
+    ap.add_argument("--guide", default=LOCAL_GUIDE, help="guide server (haebom-artemis); 'default' for the address the app was built with")
+    ap.add_argument("--tts", default=LOCAL_TTS,
+                    help="TTS server (haebom-tts); '' for the phone's own voice only; 'default' for the address the app was built with")
+    ap.add_argument("--stream", choices=["true", "false"], default=None,
+                    help="fetch the voice in pieces (/tts/stream) or whole (/tts); not given: leave the app's setting")
     ap.add_argument("--mode", default="baseline", help="guide server mode")
     ap.add_argument("--engine", default="baseline", help="TTS engine")
     ap.add_argument("--no-install", action="store_true", help="the app is already installed")
@@ -76,6 +81,9 @@ def main() -> None:
         if not base:
             print(f"{name} server: not used")
             continue
+        if base == "default":
+            print(f"{name} server: the address the app was built with")
+            continue
         if base in (LOCAL_GUIDE, LOCAL_TTS):
             port = base.rsplit(":", 1)[1]
             adb(s, "reverse", f"tcp:{port}", f"tcp:{port}")
@@ -88,7 +96,8 @@ def main() -> None:
     for _ in range(8):
         adb(s, "logcat", "-c")
         adb(s, "shell", "am", "broadcast", "-a", f"{PKG}.DEBUG_CONFIG", "-p", PKG,
-            "--es", "guide_base", a.guide, "--es", "mode", a.mode, "--es", "tts_base", f"'{a.tts}'", "--es", "engine", a.engine)
+            "--es", "guide_base", a.guide, "--es", "mode", a.mode, "--es", "tts_base", f"'{a.tts}'", "--es", "engine", a.engine,
+            *(["--es", "stream", a.stream] if a.stream else []))
         for _ in range(6):
             time.sleep(0.5)
             hits = [l for l in adb(s, "logcat", "-d", "-s", "ToolusGuide:I").stdout.splitlines() if "CONFIG " in l]

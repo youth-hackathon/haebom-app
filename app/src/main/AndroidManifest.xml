@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "말로 하기": the microphone is on only while the person is saying what they want; asked for at that moment. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Package visibility (Android 11+): launcher entries for launch_guide, the home app (the app list is
          reached from it), and the phone's own voice, which reads a sentence when the TTS server does not answer. -->
@@ -19,9 +21,11 @@
         </intent>
     </queries>
 
-    <!-- usesCleartextTraffic: the two servers are reached over http on this computer (adb reverse) during development. -->
+    <!-- usesCleartextTraffic: the servers are reached over http, on this computer (adb reverse) or at a deployed address. -->
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"

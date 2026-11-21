@@ -83,12 +83,23 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
 
     // ---------------------------------------------------------------- lifecycle
 
-    fun start(newTask: String) {
+    init {
+        overlay.onHelp = { showHelp() }
+        overlay.onReplay = { Speaker.say(service, it, again = true) }
+    }
+
+    /** What the home screen shows of the last guide ("이어서 하기", "복습하기"); the activity reads the same file. */
+    private fun kept() = service.getSharedPreferences("haebom", android.content.Context.MODE_PRIVATE)
+
+    /** [review]: the person has done this once and tries alone first; the ring comes after a while, as a hint. */
+    fun start(newTask: String, review: Boolean = false) {
         cancelPending()
         generation += 1
         sessionId = UUID.randomUUID().toString().take(8)
         task = newTask
         step = 0
+        overlay.review = review
+        kept().edit().putString("last_task", newTask).remove("last_step").remove("last_total").apply()
         consecutiveUnaimable = 0
         startedAt = System.currentTimeMillis()
         GuideHub.post("user", newTask)
@@ -99,7 +110,63 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
         later(900) { plan("start", "") }
     }
 
+    /**
+     * "도움이 필요해요" over any app: one card with what a stuck person needs: see this step again, ask the
+     * instructor (where they stopped goes with it), or stop now and continue later from the home screen.
+     */
+    private fun showHelp() {
+        val where = Practice.short(task).ifBlank { "안내" } + if (step > 0) " · ${step}단계" else ""
+        val doing = armedInstruction?.headline?.takeIf { phase == Phase.ARMED }
+        Log.i(TAG, "HELP open where=$where doing=$doing")
+        overlay.showCard("", "어디서 막히셨어요?", where + (doing?.let { "\n지금 할 일: $it" } ?: ""), listOf(
+            OverlayChip("이 단계 다시 보기", true) { showStepAgain() },
+            OverlayChip("강사님께 물어보기") { askInstructorNow(where, doing) },
+            OverlayChip("나중에 이어서 하기") { continueLater() },
+            OverlayChip("안내 그만하기", quiet = true) { stop("안내를 멈췄습니다.") },
+        ), null)
+    }
+
+    /** Put the current step back on screen: ring and bubble again, read out again. */
+    private fun showStepAgain() {
+        val instr = armedInstruction
+        when {
+            phase == Phase.ARMED && instr != null -> {
+                overlay.showGuide(instr, { declared("done") }, ::endGuide)
+                overlay.revealHint()
+                resolveAndRender()
+                // read here, not through the bubble: the bubble has not been drawn yet and has nothing to read
+                Speaker.say(service, listOfNotNull(instr.headline, instr.typeText, instr.sub).joinToString(". "), again = true)
+            }
+            // the next step is on its way: the card goes, the waiting words come back
+            phase == Phase.PLANNING || phase == Phase.SETTLING -> { overlay.hideCard(); overlay.showStatus("다음 안내를 준비하고 있어요", ::endGuide) }
+            phase == Phase.IDLE -> overlay.hideAll()
+            // a question or the end card was up: look at the screen again and ask the server
+            else -> { cancelPending(); overlay.hideCard(); phase = Phase.SETTLING; later(300) { plan("declared_stuck", "the person asked to see the step again") } }
+        }
+    }
+
+    /**
+     * Ask the instructor: the phone's share sheet with a ready message saying where the person stopped. The guide
+     * stops (the person leaves this screen to send it); the home screen's "이어서 하기" starts the same request again.
+     */
+    private fun askInstructorNow(where: String, doing: String?) {
+        Log.i(TAG, "HELP_REQUEST task=$task step=$step session=$sessionId")
+        service.sendBroadcast(Intent(ACTION_HELP_REQUEST).setPackage(service.packageName)
+            .putExtra("task", task).putExtra("step", step).putExtra("session", sessionId))
+        val msg = "[해봄] 선생님, ‘$where’에서 막혔어요." + (doing?.let { " (지금 할 일: $it)" } ?: "") + " 도와주세요."
+        stop("강사님께 보낼 메시지를 열었어요.")
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, msg)
+        service.startActivity(Intent.createChooser(send, "강사님께 보내기").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** Stop now, keep the place: back to 해봄's home, where "이어서 하기" starts the same request again. */
+    private fun continueLater() {
+        stop("나중에 이어서 할 수 있어요.")
+        service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+    }
+
     fun stop(message: String) {
+        overlay.review = false
         cancelPending()
         generation += 1
         phase = Phase.IDLE
@@ -191,8 +258,8 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
                 if (consecutiveUnaimable >= 4) {
                     phase = Phase.ASKING
                     overlay.hideAim()
-                    overlay.showCard(stepLabel(step), "누를 곳을 찾지 못하고 있어요", "지금 화면에서 무엇을 하려는지 채팅으로 알려 주세요.",
-                        listOf(OverlayChip("채팅으로 알려주기", true) { openChat() }, endChip()), null)
+                    overlay.showCard(stepLabel(step), "누를 곳을 찾지 못하고 있어요", "지금 화면에서 무엇을 하려는지 해봄에 알려 주세요.",
+                        listOf(OverlayChip("해봄에 알려 주기", true) { openChat() }, endChip()), null)
                 } else plan("unaimable", "${routing.reason}: ${routing.detail}")
             }
             is GuideCatalog.Routing.Wait -> {
@@ -204,15 +271,21 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
             is GuideCatalog.Routing.Ask -> {
                 phase = Phase.ASKING
                 overlay.hideAim()
-                overlay.showCard(stepLabel(step), routing.question, r.explain, listOf(OverlayChip("채팅으로 답하기", true) { openChat() }, endChip()), null)
+                overlay.showCard(stepLabel(step), routing.question, r.explain, listOf(OverlayChip("해봄에서 답하기", true) { openChat() }, endChip()), null)
                 GuideHub.post("guide", "❓ ${routing.question}")
             }
             is GuideCatalog.Routing.Terminal -> {
                 phase = Phase.FINISHED
                 overlay.hideAim()
-                val title = if (routing.completed) "다 했어요" else "여기서 멈출게요"
+                val wasReview = overlay.review
+                overlay.review = false
+                // done once: the home screen then offers "복습하기" (the same request with a lighter overlay)
+                if (routing.completed) kept().edit().putBoolean("done_${Practice.key(task)}", true).remove("last_step").remove("last_total").apply()
+                val title = if (!routing.completed) "여기서 멈출게요" else if (wasReview) "복습까지 해냈어요!" else "다 했어요"
                 Speaker.say(service, title)
-                val why = r.explain.ifBlank { routing.explanation }
+                val said = r.explain.ifBlank { routing.explanation }
+                val why = if (!routing.completed) said
+                    else listOf(said, if (wasReview) "거의 혼자서 해냈어요." else "다음엔 홈에서 ‘복습하기’로 혼자 해 보세요.").filter { it.isNotBlank() }.joinToString("\n")
                 overlay.showCard(if (routing.completed) "완료" else "중단", title, why, listOf(OverlayChip("닫기", true) { overlay.hideAll(); phase = Phase.IDLE }), null)
                 GuideHub.post("guide", "${if (routing.completed) "✅" else "⚠️"} $title — $why")
             }
@@ -247,6 +320,8 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
         coveredSince = 0L
         offViewSince = 0L
         armedInstruction = instructionFor(s, r)
+        // the home screen's "이어서 하기" block shows how far this went
+        kept().edit().putInt("last_step", step).apply()
         Speaker.say(service, armedInstruction!!.headline)
         overlay.showGuide(armedInstruction!!, { declared("done") }, ::endGuide)
         resolveAndRender()

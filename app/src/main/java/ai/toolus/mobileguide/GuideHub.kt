@@ -4,7 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** Process-wide link between the chat activity and the accessibility service. */
+/** Process-wide link between the home activity and the accessibility service. */
 object GuideHub {
     data class ChatMessage(val role: String, val text: String, val ts: Long = System.currentTimeMillis())
 
@@ -22,9 +22,10 @@ object GuideHub {
 
     fun awaitingUserAnswer(): Boolean = service?.session?.awaitingUserAnswer() == true
 
-    fun startTask(task: String): Boolean {
+    /** [review]: the person has done this before and tries alone first (the ring comes later, as a hint). */
+    fun startTask(task: String, review: Boolean = false): Boolean {
         val s = service ?: return false
-        main.post { s.session.start(task) }
+        main.post { s.session.start(task, review) }
         return true
     }
 
@@ -35,6 +36,6 @@ object GuideHub {
 
     fun stop() {
         val s = service ?: return
-        main.post { s.session.stop("채팅에서 중단했습니다.") }
+        main.post { s.session.stop("설정에서 안내를 멈췄습니다.") }
     }
 }
