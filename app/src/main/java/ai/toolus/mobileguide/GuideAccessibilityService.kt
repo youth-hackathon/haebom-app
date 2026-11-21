@@ -28,16 +28,15 @@ class GuideAccessibilityService : AccessibilityService() {
                 }
                 ACTION_DEBUG_DECLARE -> intent.getStringExtra("kind")?.let { session.debugDeclare(it) }
                 ACTION_DEBUG_ACTION -> intent.getStringExtra("json")?.let { session.debugAction(it) }
-                // Where the two servers are, and which mode / engine the app asks them for. Without extras it only reports.
+                // Where the two servers are, and which mode the app asks the guide server for. Without extras it only reports.
                 ACTION_DEBUG_CONFIG -> {
                     intent.getStringExtra("guide_base")?.let { GuideSettings.guideBase = it }
                     intent.getStringExtra("mode")?.let { GuideSettings.guideMode = it }
                     intent.getStringExtra("tts_base")?.let { GuideSettings.ttsBase = it }
-                    intent.getStringExtra("engine")?.let { GuideSettings.ttsEngine = it }
                     intent.getStringExtra("stream")?.let { GuideSettings.ttsStream = it == "true" || it == "1" }
                     // the speech server's address can end in a secret path: the log names the host only
                     Log.i(GuideSession.TAG, "CONFIG guide=${GuideSettings.guideBase} mode=${GuideSettings.guideMode.ifEmpty { "-" }} " +
-                        "tts=${GuideSettings.hostOf(GuideSettings.ttsBase).ifEmpty { "-" }} engine=${GuideSettings.ttsEngine.ifEmpty { "-" }} " +
+                        "tts=${GuideSettings.hostOf(GuideSettings.ttsBase).ifEmpty { "-" }} engine=${GuideSettings.VOICE} " +
                         "stream=${GuideSettings.ttsStream}")
                     GuideHub.post("system", "안내 서버: ${GuideSettings.guideBase}")
                 }

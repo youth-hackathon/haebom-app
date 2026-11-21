@@ -48,7 +48,7 @@ object GuideSettings {
 
     /**
      * How the sound is fetched. True (the default): in pieces (`POST /tts/stream`), played as they come.
-     * False: one whole file (`POST /tts`, with [ttsEngine]).
+     * False: one whole file (`POST /tts`, in the voice [VOICE]).
      */
     var ttsStream: Boolean
         get() = get("tts_stream", "true") == "true"
@@ -57,8 +57,9 @@ object GuideSettings {
     /** An address without its path (`http://host:port`), for the screen and the log. */
     fun hostOf(base: String): String = Regex("^(https?://[^/]+)").find(base)?.groupValues?.get(1) ?: base
 
-    /** The `engine` of a `POST /tts` request; empty leaves the choice to the server's own default. */
-    var ttsEngine: String
-        get() = get("tts_engine", BASELINE)
-        set(v) = set("tts_engine", v)
+    /**
+     * The `engine` of every `POST /tts` request. It is not a setting: the app always reads in Gemini's voice and waits
+     * for it however long it takes (the server's `baseline` voice is hard to listen to). `/tts/stream` is that voice too.
+     */
+    const val VOICE = "gemini"
 }

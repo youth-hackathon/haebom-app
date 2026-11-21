@@ -26,7 +26,7 @@
 
 길은 하나입니다. 하고 싶은 일을 문장으로 요청하면 안내 서버가 단계를 하나씩 고르고, TTS 서버가 문장을 읽습니다.
 
-- 들어 있는 것: 말하거나 적어서 요청하기, 단계별 안내(누르기, 길게 누르기, 입력, 밀기, 뒤로·홈 버튼, 앱 열기, 기다리기), 완료 판단, 안내 문장 읽기와 다시 듣기, TTS 서버가 답하지 않을 때 폰 음성으로 읽기, 막혔을 때의 도움 카드, 한 번 해 본 것을 혼자 해 보는 복습.
+- 들어 있는 것: 말하거나 적어서 요청하기, 단계별 안내(누르기, 길게 누르기, 입력, 밀기, 뒤로·홈 버튼, 앱 열기, 기다리기), 완료 판단, 안내 문장 읽기와 다시 듣기, Gemini 음성으로 읽기(늦어도 기다림), 막혔을 때의 도움 카드, 한 번 해 본 것을 혼자 해 보는 복습.
 - "배울 것 보기"의 항목은 앱이 미리 아는 요청 문장입니다([`Practice.kt`](app/src/main/java/ai/toolus/mobileguide/Practice.kt)). 누르면 그 문장을 적어 보낸 것과 똑같이 안내 서버로 갑니다. 문장은 매뉴얼 서버([haebom-manual](https://github.com/youth-hackathon/haebom-manual))가 매뉴얼을 가진 것으로 골랐습니다. 순서를 아는 쪽은 서버이고 앱은 문장만 압니다.
 - 폰에는 모델 키가 없습니다. 모델은 서버가 부릅니다. 앱에는 외부 라이브러리가 없고 Android SDK만 씁니다. 음성 인식에 쓰는 웹소켓도 앱 안에서 직접 다룹니다([`SpeechInput.kt`](app/src/main/java/ai/toolus/mobileguide/SpeechInput.kt)).
 
@@ -86,7 +86,7 @@
 |---|---|---|
 | 기본 주소 | `http://127.0.0.1:8765` | `http://127.0.0.1:8766` |
 | 요청 | `POST /v1/guide/next` (JSON) | 아래 표 |
-| 방식 고르기 | 요청의 `mode`. 앱 기본값 `baseline` | 소리를 받는 방식(조각으로, 한 번에)과 `engine` |
+| 방식 고르기 | 요청의 `mode`. 앱 기본값 `baseline` | 소리를 받는 방식(조각으로, 한 번에). 목소리는 언제나 `gemini`입니다 |
 | 기다리는 시간 | 연결 3초, 응답 120초 | 아래 표 |
 | 답이 없으면 | "안내를 준비하지 못했어요" 카드와 다시 시도 버튼 | 폰에 든 음성으로 읽고 안내는 그대로 이어 감 |
 | 상태 확인 | `GET /health`가 1.5초 안에 200 | 쓰지 않음 |
@@ -95,8 +95,9 @@ TTS 서버에는 세 가지를 요청합니다. 조각으로 받는 길과 말�
 
 | 하는 일 | 요청 | 앱이 하는 것 |
 |---|---|---|
-| 문장 읽기, 조각으로 (기본) | `POST /tts/stream` `{"text"}` | 한 줄에 하나씩 오는 소리 조각(PCM 24kHz)을 오는 대로 재생합니다. 문장 전체가 만들어지기 전에 소리가 나기 시작합니다. 재생 속도는 앱이 0.9배로 맞춥니다. 처음 소리가 2.5초 안에 오지 않으면 폰 음성으로 읽습니다. 한 번 읽은 문장은 메모리에 두어 "다시 듣기"와 같은 문장이 바로 나옵니다 |
-| 문장 읽기, 한 번에 | `POST /tts` `{"text", "speed": 0.9, "engine"}` | 소리 파일이 다 오면 재생합니다. 1.5초 안에 다 오지 않으면 폰 음성으로 읽습니다. 조각으로 주지 않는 서버(그 목소리의 키가 없는 서버)에는 앱이 알아서 이 길로 요청합니다 |
+| 문장 읽기, 조각으로 (기본) | `POST /tts/stream` `{"text"}` | 한 줄에 하나씩 오는 소리 조각(PCM 24kHz)을 오는 대로 재생합니다. 문장 전체가 만들어지기 전에 소리가 나기 시작합니다. 재생 속도는 앱이 0.9배로 맞춥니다. 소리가 늦어도 다른 목소리로 바꾸지 않고 기다립니다. 한 번 읽은 문장은 메모리에 두어 "다시 듣기"와 같은 문장이 바로 나옵니다 |
+| 문장 읽기, 한 번에 | `POST /tts` `{"text", "speed": 0.9, "engine": "gemini"}` | 소리 파일이 다 오면 재생합니다. 조각으로 주지 않는 서버에는 이 방법으로 다시 청합니다 |
+| 목소리 | | 언제나 Gemini 음성입니다. 서버가 오래 걸려도 기다리고, 늦는다고 다른 목소리로 바꾸지 않습니다. 서버에 닿지 못하거나 오류가 두 번 이어질 때만 폰 음성으로 읽습니다 |
 | 말소리 받아 적기 | `GET /stt/live` (웹소켓) | "말로 하기"를 누른 동안 마이크 소리(PCM 16kHz)를 0.1초씩 보내고, 돌아오는 글을 입력란에 채웁니다. TTS 서버 주소가 비어 있으면 폰의 음성 인식을 씁니다 |
 
 기본 주소가 `127.0.0.1`인 것은 개발할 때 서버를 같은 컴퓨터에 띄우고 `adb reverse`로 폰과 잇기 때문입니다. 다른 곳에 띄운 서버는 빌드할 때 넣거나(아래 "배포된 서버의 주소 넣기") "설정"으로 가리킵니다.
@@ -131,7 +132,7 @@ install: Success
 accessibility service: on
 guide server: http://127.0.0.1:8765 (answers /health)
 tts server: http://127.0.0.1:8766 (answers /health)
-app: CONFIG guide=http://127.0.0.1:8765 mode=baseline tts=http://127.0.0.1:8766 engine=baseline stream=true
+app: CONFIG guide=http://127.0.0.1:8765 mode=baseline tts=http://127.0.0.1:8766 engine=gemini stream=true
 ```
 
 ### 배포된 서버의 주소 넣기
@@ -172,7 +173,7 @@ python -I scripts/follow.py "설정에서 battery를 검색해줘" --home --devi
 ```bash
 python -I scripts/setup_device.py --serial <기기> --no-install \
     --guide https://artemis.example.com --tts https://tts.example.com \
-    --mode baseline --engine baseline
+    --mode baseline
 ```
 
 | 옵션 | 뜻 | 기본값 |
@@ -181,9 +182,8 @@ python -I scripts/setup_device.py --serial <기기> --no-install \
 | `--mode` | artemis 서버의 방식. 서버의 `/health`가 `modes`로 알려 주는 이름 | `baseline` |
 | `--tts` | TTS 서버 주소. `''`이면 폰 음성만 씁니다. `default`이면 빌드할 때 넣은 주소를 씁니다 | `http://127.0.0.1:8766` |
 | `--stream` | `true`이면 소리를 조각으로(`/tts/stream`), `false`이면 한 번에(`/tts`) 받습니다 | 앱의 설정 그대로(처음에는 `true`) |
-| `--engine` | 한 번에 받을 때의 TTS 엔진. 서버의 `/health`가 `engines`로 알려 주는 이름 | `baseline` |
 
-서버에 새 방식이나 새 엔진이 생기면 이 옵션으로 바꿔 보고, 말썽이면 `baseline`으로 돌립니다. 앱은 다시 빌드하지 않아도 됩니다.
+서버에 새 방식이 생기면 `--mode`로 바꿔 보고, 말썽이면 `baseline`으로 돌립니다. 앱은 다시 빌드하지 않아도 됩니다.
 
 ## 디버그 명령과 로그
 
@@ -202,7 +202,7 @@ adb shell "am broadcast -a ai.toolus.mobileguide.DEBUG_START -p ai.toolus.mobile
 | `DEBUG_ACTION --es json <동작>` | 서버 없이 동작 하나를 안내로 띄워 보기 |
 | `DEBUG_DUMP` | 지금 화면에서 읽은 요소 목록을 로그로 |
 | `DEBUG_BENCH` | 화면 읽기에 걸리는 시간 재기 |
-| `DEBUG_CONFIG [--es guide_base … --es mode … --es tts_base … --es engine … --es stream true\|false]` | 설정 바꾸기. 값 없이 보내면 지금 설정만 로그로. 주소에 `default`를 주면 빌드할 때 넣은 주소로 돌아갑니다 |
+| `DEBUG_CONFIG [--es guide_base … --es mode … --es tts_base … --es stream true\|false]` | 설정 바꾸기. 값 없이 보내면 지금 설정만 로그로. 주소에 `default`를 주면 빌드할 때 넣은 주소로 돌아갑니다 |
 
 로그 태그는 `ToolusGuide`입니다(`adb logcat -s ToolusGuide`).
 
@@ -227,7 +227,7 @@ adb shell "am broadcast -a ai.toolus.mobileguide.DEBUG_START -p ai.toolus.mobile
 |---|---|---|---|
 | "설정에서 블루투스 화면 열어줘" | 안내 5단계 모두 확인되고 완료 | 84.0초 | 안내 문장 5개 모두 TTS 서버 소리 (0.09~0.29초) |
 | "설정에서 battery를 검색해줘" | 안내 6단계(누르기 5, 입력 1) 모두 확인되고 완료 | 76.3초 | 안내 문장 6개 모두 TTS 서버 소리 (0.09~0.23초) |
-| TTS 서버를 끈 채 안내 한 단계 | 안내는 그대로 뜸 | | 1.5초 뒤 폰 음성으로 읽음 |
+| TTS 서버를 끈 채 안내 한 단계 | 안내는 그대로 뜸 | | 1.5초 뒤 폰 음성으로 읽음 (이 측정 뒤에 바뀜: 아래 "목소리") |
 
 걸린 시간의 대부분은 서버가 모델의 답을 기다리는 시간입니다. 한 단계에 5.6~15.3초였습니다. 두 번째 요청에서 단계가 여섯인 것은 설정 앱이 앞의 실행에서 열어 둔 블루투스 화면에서 다시 열려, 뒤로 가는 단계가 세 번 들어갔기 때문입니다.
 

@@ -27,16 +27,21 @@ import java.util.concurrent.Executors
  *  - in pieces ([GuideSettings.ttsStream], the default): `POST /tts/stream` answers with lines of PCM, and each piece
  *    is played as it comes, so the voice starts before the whole sentence is made;
  *  - whole: `POST /tts` answers with one audio file, played when all of it is here.
- * When the first sound has not come within [FIRST_SOUND_MS] (in pieces) or the file within [WAIT_MS] (whole), or the
- * server fails or is not set, the phone's own voice (android.speech.tts.TextToSpeech) reads the sentence instead.
- * A server that does not offer the pieces (no key for that voice) is asked for the whole sound.
+ * The voice is always Gemini's ([GuideSettings.VOICE]). However long the server takes, the app waits for that voice:
+ * it does not swap to another one because the sound is late. A server that does not offer the pieces is asked for
+ * the whole sound in the same voice. Only when the server cannot be reached or answers with an error, twice in a
+ * row, or no server is set, does the phone's own voice (android.speech.tts.TextToSpeech) read the sentence, so that
+ * a broken network does not leave the person with no sound at all.
  * A sentence that was read in pieces is kept in memory, so reading it again ("다시 듣기") starts at once.
  * The guide server is not involved: this takes a sentence and nothing else, and showing the guide never waits for it.
  */
 object Speaker {
     private const val TAG = "ToolusGuide"
-    private const val WAIT_MS = 1500L
-    private const val FIRST_SOUND_MS = 2500L
+    /** How long one connection may take, and how long the app waits for the next bytes of the voice. */
+    private const val CONNECT_MS = 10_000
+    private const val READ_MS = 60_000
+    /** A failed request for the whole sound is made this many times before the phone's own voice reads. */
+    private const val TRIES = 2
     /** The same sentence again this soon is the same step being shown again, not a new step. */
     private const val REPEAT_MS = 4000L
     private const val SPEED = 0.9
@@ -121,27 +126,21 @@ object Speaker {
         val j = Job().also { job = it }
         val started = System.currentTimeMillis()
         var settled = false
-        /** Before any sound: hand the sentence to the whole-sound path or to the phone's voice, once. */
-        fun giveUp(reason: String, askWhole: Boolean) {
+        /** The pieces did not come, before any sound: ask for the whole sound, in the same voice. No clock is involved. */
+        fun askWhole(reason: String) {
             if (settled || my != turn) return
             synchronized(j) { if (j.sounding) return; j.cancelled = true }
             settled = true
             cancel(j)
-            if (askWhole) {
-                Log.i(TAG, "TTS no pieces from this server ($reason), asking for the whole sound")
-                whole(app, base, sentence, my)
-            } else {
-                Log.i(TAG, "TTS phone voice ($reason): $sentence")
-                speakLocally(app, sentence)
-            }
+            Log.i(TAG, "TTS no pieces ($reason), asking for the whole sound")
+            whole(app, base, sentence, my)
         }
-        main.postDelayed({ giveUp("no sound in ${FIRST_SOUND_MS}ms", false) }, FIRST_SOUND_MS)
         net.execute {
             val result = runCatching { readPieces(j, base, sentence, started) }
             main.post {
                 result.onSuccess { pcm -> if (pcm != null) heard[sentence] = pcm }.onFailure { e ->
                     if (j.sounding) { if (!j.cancelled) Log.w(TAG, "TTS pieces broke off after the sound began: ${e.message}") }
-                    else giveUp(if (e is Unavailable) e.message ?: "" else "server failed: ${e.message}", e is Unavailable)
+                    else askWhole(if (e is Unavailable) e.message ?: "" else "server failed: ${e.message}")
                 }
             }
         }
@@ -155,8 +154,8 @@ object Speaker {
         var played = 0
         try {
             c.requestMethod = "POST"
-            c.connectTimeout = 2000
-            c.readTimeout = 8000
+            c.connectTimeout = CONNECT_MS
+            c.readTimeout = READ_MS
             c.doOutput = true
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             // no speed here: this path takes none; the slower reading is done by the player (see [open])
@@ -278,25 +277,25 @@ object Speaker {
 
     // ---------------------------------------------------------------- whole: POST /tts
 
-    private fun whole(app: Context, base: String, sentence: String, my: Int) {
-        var settled = false
-        fun local(reason: String) {
-            if (settled || my != turn) return
-            settled = true
-            Log.i(TAG, "TTS phone voice ($reason): $sentence")
-            speakLocally(app, sentence)
-        }
-        main.postDelayed({ local("no answer in ${WAIT_MS}ms") }, WAIT_MS)
+    /** Waits for the server's voice for as long as it takes. A failed request is made again ([TRIES] in all). */
+    private fun whole(app: Context, base: String, sentence: String, my: Int, attempt: Int = 1) {
         net.execute {
             val started = System.currentTimeMillis()
             val audio = runCatching { fetch(app, base, sentence, my) }
             main.post {
-                if (settled || my != turn) return@post
+                if (my != turn) return@post
                 audio.onSuccess {
-                    settled = true
                     Log.i(TAG, "TTS server ${System.currentTimeMillis() - started}ms ${it.length()}B: $sentence")
                     play(it) { why -> Log.w(TAG, "TTS playback failed ($why)"); speakLocally(app, sentence) }
-                }.onFailure { local("server failed: ${it.message}") }
+                }.onFailure { e ->
+                    if (attempt < TRIES) {
+                        Log.i(TAG, "TTS server failed (${e.message}), asking again")
+                        whole(app, base, sentence, my, attempt + 1)
+                    } else {
+                        Log.i(TAG, "TTS phone voice (server failed $TRIES times: ${e.message}): $sentence")
+                        speakLocally(app, sentence)
+                    }
+                }
             }
         }
     }
@@ -305,12 +304,11 @@ object Speaker {
         val c = URL("$base/tts").openConnection() as HttpURLConnection
         try {
             c.requestMethod = "POST"
-            c.connectTimeout = 1000
-            c.readTimeout = 5000
+            c.connectTimeout = CONNECT_MS
+            c.readTimeout = READ_MS
             c.doOutput = true
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            val body = JSONObject().put("text", sentence).put("speed", SPEED)
-            GuideSettings.ttsEngine.takeIf { it.isNotEmpty() }?.let { body.put("engine", it) }
+            val body = JSONObject().put("text", sentence).put("speed", SPEED).put("engine", GuideSettings.VOICE)
             c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val code = c.responseCode
             if (code != 200) throw IllegalStateException("tts $code")

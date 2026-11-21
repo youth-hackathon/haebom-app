@@ -8,7 +8,7 @@ app at the two servers, wake the screen, and ask the app what it is set to (DEBU
 
 Without --guide / --tts the servers are the ones on this computer (ports 8765 and 8766), reached through
 `adb reverse`. `--tts default` (or `--guide default`) leaves the address the app was built with (local.properties,
-see app/build.gradle.kts). --mode and --engine choose the servers' way of working; the default is `baseline` on both.
+see app/build.gradle.kts). --mode chooses the guide server's way of working (default `baseline`). The voice is always Gemini's: no option.
 --stream true|false chooses how the voice is fetched: in pieces (`/tts/stream`, the app's default) or whole (`/tts`).
 Some phones (One UI) do not let adb turn an accessibility service on; the script then says so and the service
 is switched on by hand: Settings > Accessibility > Installed apps > 해봄 (화면 안내).
@@ -56,7 +56,6 @@ def main() -> None:
     ap.add_argument("--stream", choices=["true", "false"], default=None,
                     help="fetch the voice in pieces (/tts/stream) or whole (/tts); not given: leave the app's setting")
     ap.add_argument("--mode", default="baseline", help="guide server mode")
-    ap.add_argument("--engine", default="baseline", help="TTS engine")
     ap.add_argument("--no-install", action="store_true", help="the app is already installed")
     a = ap.parse_args()
     s = a.serial
@@ -96,7 +95,7 @@ def main() -> None:
     for _ in range(8):
         adb(s, "logcat", "-c")
         adb(s, "shell", "am", "broadcast", "-a", f"{PKG}.DEBUG_CONFIG", "-p", PKG,
-            "--es", "guide_base", a.guide, "--es", "mode", a.mode, "--es", "tts_base", f"'{a.tts}'", "--es", "engine", a.engine,
+            "--es", "guide_base", a.guide, "--es", "mode", a.mode, "--es", "tts_base", f"'{a.tts}'",
             *(["--es", "stream", a.stream] if a.stream else []))
         for _ in range(6):
             time.sleep(0.5)
