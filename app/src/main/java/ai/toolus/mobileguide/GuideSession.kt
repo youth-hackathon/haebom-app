@@ -150,6 +150,8 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
             put("event_detail", detail)
             // the phone's own settings: the server can tell "done" from them where the screen cannot show it
             put("facts", DeviceFacts.read(service))
+            // which phone this is: a manual's steps are written per device (its launcher and its apps' screens)
+            put("device_model", Build.MODEL)
             put("screen", JSONObject().apply {
                 put("package", snap.packageName)
                 put("width", snap.width)
