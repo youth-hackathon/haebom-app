@@ -15,6 +15,8 @@ object PlannerClient {
         val explain: String,
         val action: GuideCatalog.Action,
         val latencyMs: Long,
+        /** Who answered, as the server says in `meta.source` ("manual", "check", "wait", "model"); "" when it does not say. */
+        val source: String = "",
     )
 
     /** The server answers `GET /health` with 200 within 1.5 s. */
@@ -39,6 +41,7 @@ object PlannerClient {
             explain = j.optString("explain"),
             action = GuideCatalog.Action(a.optString("name", "ask_user"), args),
             latencyMs = System.currentTimeMillis() - started,
+            source = j.optJSONObject("meta")?.optString("source").orEmpty(),
         )
     }
 

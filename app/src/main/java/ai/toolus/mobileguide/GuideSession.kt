@@ -183,6 +183,7 @@ class GuideSession(private val service: GuideAccessibilityService, private val o
         step += 1
         val routing = GuideCatalog.route(r.action, snap, service.packageManager)
         Log.i(TAG, "step=$step action=${r.action.name} ${r.action.args} -> ${routing::class.simpleName} (${r.latencyMs}ms)")
+        if (r.source.isNotEmpty()) Log.i(TAG, "SOURCE step=$step ${r.source}")
         when (routing) {
             is GuideCatalog.Routing.Guide -> arm(routing.spec, r)
             is GuideCatalog.Routing.Unaimable -> {
