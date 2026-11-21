@@ -135,11 +135,14 @@ class MainActivity : Activity() {
 
         // Figma "시안 A · 큰 타일 2×2": what the person was doing is the biggest block, the rest are four equal tiles.
         // The guide server looks at the screen as it is, so asking for the same thing again goes on from where the phone is.
+        // Nothing started yet: the block offers one thing to try first ([Practice.first]), so it is never missing.
         if (last != null) {
             val short = Practice.short(last)
             val done = prefs.getBoolean("done_${Practice.key(last)}", false) && prefs.getInt("last_step", 0) == 0
             col.addView(if (done) continueBlock("$short · 혼자서", 0, 0, label = "복습하기", icon = Icon.REPLAY) { startFlow(last, review = true) }
                 else continueBlock(short, prefs.getInt("last_step", 0), prefs.getInt("last_total", 0)) { startFlow(last) }, lp(top = 16))
+        } else {
+            col.addView(continueBlock(Practice.first.short, 0, 0, label = "먼저 해 보기") { startFlow(Practice.first.task) }, lp(top = 16))
         }
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun row(a: View, b: View) = LinearLayout(this).apply {

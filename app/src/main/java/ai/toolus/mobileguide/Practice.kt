@@ -16,6 +16,9 @@ object Practice {
         Item("bluetooth", "블루투스 화면 열기", "블루투스 화면", "설정에서 블루투스를 켜고 끄는 화면을 찾아갑니다.", "설정에서 블루투스 화면 열어줘"),
     )
 
+    /** What the home screen's big block offers a person who has not started anything yet. */
+    val first: Item = items.first { it.id == "font-size" }
+
     private fun of(task: String) = items.firstOrNull { it.task == task }
 
     /** What a task's "done once" mark is kept under: the item's id, or the sentence itself for a typed request. */
